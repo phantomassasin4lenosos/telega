@@ -12,7 +12,8 @@ menu_keyboard = ReplyKeyboardMarkup(
 )
 
 games = [
-    [KeyboardButton(text="CoinFlip 🪙"), KeyboardButton(text="Dice 🎲")]
+    [KeyboardButton(text="CoinFlip 🪙"), KeyboardButton(text="Dice 🎲")],
+    [KeyboardButton(text="Назад")]
 ]
 
 games_keyboard = ReplyKeyboardMarkup(
@@ -22,7 +23,8 @@ games_keyboard = ReplyKeyboardMarkup(
 
 
 coinflip = [
-    [KeyboardButton(text="Орел"), KeyboardButton(text="Решка")]
+    [KeyboardButton(text="Орел"), KeyboardButton(text="Решка")],
+    [KeyboardButton(text="Назад")]
 ]
 
 coinflip_keyboard = ReplyKeyboardMarkup(
