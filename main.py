@@ -1,4 +1,5 @@
 import asyncio
+import decimal
 import sqlite3 as sq
 
 from decimal import Decimal
@@ -37,6 +38,8 @@ async def sender(message: Message):
 @dp.message(F.text == "Выбрать игру 🎰")
 async def sender(message: Message):
     if register(message.from_user.id):
+        cur.execute("UPDATE users SET block = 'games'")
+        db.commit()
         await message.answer("Выберите игру: ", reply_markup=games_keyboard)
     else:
         await message.answer("Пожалуйста, нажмите /start чтобы зарегистрироваться")
@@ -75,6 +78,27 @@ async def sender(message: Message):
         await message.answer("Пожалуйста, нажмите /start чтобы зарегистрироваться")
 
 
+@dp.message(F.text == "Назад")
+async def sender(message: Message):
+    if register(message.from_user.id):
+        if block(message.from_user.id) in ["coinflip", "cf_bet1", "cf_bet2"]:
+            cur.execute("UPDATE users SET block = 'games'")
+            await message.answer("Выберите игру:", reply_markup=games_keyboard)
+        elif block(message.from_user.id) == "games":
+            cur.execute("UPDATE users SET block = 'main'")
+            await message.answer("Главное меню:", reply_markup=menu_keyboard)
+        db.commit()
+
+
+@dp.message(F.text == "/balance")
+@dp.message(F.text == "Баланс 💰")
+async def sender(message: Message):
+    if register(message.from_user.id):
+        await message.answer(f"Ваш баланс: {balance(message.from_user.id)}₽")
+    else:
+        await message.answer("Пожалуйста, нажмите /start чтобы зарегистрироваться")
+
+
 @dp.message(F.text)
 async def sender(message: Message):
     try:
@@ -102,15 +126,11 @@ async def sender(message: Message):
                     await message.answer("Недостаточно средств")
     except ValueError:
         await message.answer("Некорректная сумма")
+    except decimal.InvalidOperation:
+        await message.answer("""Пожалуйста используйте /help для навигации
 
+Или нажмите /start чтобы вернуться в главное меню""")
 
-@dp.message(F.text == "/balance")
-@dp.message(F.text == "Баланс 💰")
-async def sender(message: Message):
-    if register(message.from_user.id):
-        await message.answer(f"Ваш баланс: {balance(message.from_user.id)}₽")
-    else:
-        await message.answer("Пожалуйста, нажмите /start чтобы зарегистрироваться")
 
 
 @dp.message(F.text == "/help")
