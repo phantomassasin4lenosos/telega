@@ -1,10 +1,11 @@
 import asyncio
-import sqlite3 as sq
 import decimal
+import sqlite3 as sq
+import random
 
-from random import randint
-from database import db, cur, register, balance, block
-from config import access_token
+from decimal import Decimal
+from database import db, cur, register, block, balance
+from config import access_token, reg_text, help_text, bet_text, nav_text
 from aiogram.types import Message
 from aiogram import Bot, Dispatcher, F
 from keyboard import main_keyboard, games_keyboard, coinflip_keyboard
@@ -17,51 +18,19 @@ dp = Dispatcher()
 async def sender(message: Message):
     try:
         cur.execute(f"INSERT INTO users (user_id) VALUES ({message.from_user.id})")
-        await message.answer("""✅ Вы успешно зарегистрировались!
+        await message.answer(reg_text, reply_markup=main_keyboard)
 
-Почему именно AMG4GAMES?
-
-- Моментальный бонус за регистрацию 50₽
-- Быстрые выплаты
-- Высокий процент выйгрыша
-- Полная анонимность для всех игроков
-- Разнообразие игровых режимов
-
-Список команд быстрого доступа - /help""", reply_markup=main_keyboard)
     except sq.IntegrityError:
         await message.answer("Главное меню:", reply_markup=main_keyboard)
+
+    cur.execute(f"UPDATE users SET block = 'main' WHERE user_id == {message.from_user.id}")
     db.commit()
 
 
-@dp.message(F.text == "/games")
-@dp.message(F.text == "Выбрать игру 🎰")
+@dp.message(F.text == "/help")
 async def sender(message: Message):
     if register(message.from_user.id):
-        cur.execute("UPDATE users SET block = 'games'")
-        await message.answer("Выберите игру: ", reply_markup=games_keyboard)
-    db.commit()
-
-
-@dp.message(F.text == "Назад")
-async def sender(message: Message):
-    if register(message.from_user.id):
-        if block(message.from_user.id) == "games":
-            cur.execute("UPDATE users SET block = 'main'")
-            await message.answer("Главное меню:", reply_markup=main_keyboard)
-
-        elif block(message.from_user.id) in ["coinflip", "cf_bet1", "cf_bet2"]:
-            cur.execute("UPDATE users SET block = 'games'")
-            await message.answer("Выберите игру: ", reply_markup=games_keyboard)
-    db.commit()
-
-
-@dp.message(F.text == "/coinflip")
-@dp.message(F.text == "CoinFlip 🪙")
-async def sender(message: Message):
-    if register(message.from_user.id):
-        cur.execute("UPDATE users SET block = 'coinflip'")
-        await message.answer("Орел / Решка:", reply_markup=coinflip_keyboard)
-    db.commit()
+        await message.answer(help_text)
 
 
 @dp.message(F.text == "/balance")
@@ -71,75 +40,92 @@ async def sender(message: Message):
         await message.answer(f"Ваш баланс: {balance(message.from_user.id)}₽")
 
 
+@dp.message(F.text == "Назад")
+async def sender(message: Message):
+    if register(message.from_user.id):
+        if block(message.from_user.id) == "games":
+            cur.execute(f"UPDATE users SET block = 'main' WHERE user_id == {message.from_user.id}")
+            await message.answer("Главное меню:", reply_markup=main_keyboard)
+
+        elif block(message.from_user.id) in ["coinflip", "cf_bet1", "cf_bet2"]:
+            cur.execute(f"UPDATE users SET block = 'games' WHERE user_id == {message.from_user.id}")
+            await message.answer("Выберите игру: ", reply_markup=games_keyboard)
+    db.commit()
+
+
+@dp.message(F.text == "/games")
+@dp.message(F.text == "Выбрать игру 🎰")
+async def sender(message: Message):
+    if register(message.from_user.id):
+        cur.execute(f"UPDATE users SET block = 'games' WHERE user_id == {message.from_user.id}")
+        await message.answer("Выберите игру: ", reply_markup=games_keyboard)
+    db.commit()
+
+
+@dp.message(F.text == "/coinflip")
+@dp.message(F.text == "CoinFlip 🪙")
+async def sender(message: Message):
+    if register(message.from_user.id):
+        cur.execute(f"UPDATE users SET block = 'coinflip' WHERE user_id == {message.from_user.id}")
+        await message.answer("Орел / Решка:", reply_markup=coinflip_keyboard)
+    db.commit()
+
+
 @dp.message(F.text == "Орел")
 @dp.message(F.text == "Решка")
 async def sender(message: Message):
     if register(message.from_user.id):
         if block(message.from_user.id) in ["coinflip", "cf_bet1", "cf_bet2"]:
             if message.text == "Орел":
-                cur.execute("UPDATE users SET block = 'cf_bet1'")
+                cur.execute(f"UPDATE users SET block = 'cf_bet1' WHERE user_id == {message.from_user.id}")
 
             elif message.text == "Решка":
-                cur.execute("UPDATE users SET block = 'cf_bet2'")
+                cur.execute(f"UPDATE users SET block = 'cf_bet2' WHERE user_id == {message.from_user.id}")
 
-            await message.answer(f"""Ваш баланс: {balance(message.from_user.id)}₽
-Ставка: {message.text}
+            await message.answer(bet_text(message.text, message.from_user.id))
 
-Сделайте ставку:""")
         else:
-            await message.answer("""Пожалуйста используйте /help для навигации
-
-Или нажмите /start чтобы вернуться в главное меню""")
+            await message.answer(nav_text)
     db.commit()
 
 
 @dp.message(F.text)
 async def sender(message: Message):
-    try:
-        if register(message.from_user.id):
-            if block(message.from_user.id) in ["cf_bet1", "cf_bet2"]:
-                bet = decimal.Decimal(message.text).quantize(decimal.Decimal("1.00"))
-                rand = randint(1, 2)
-                if bet < decimal.Decimal("0.01"):
+    if register(message.from_user.id):
+        if block(message.from_user.id) in ["cf_bet1", "cf_bet2"]:
+
+            try:
+                bet = Decimal(message.text).quantize(Decimal("1.00"))
+                cf_result = random.randint(1, 2)
+
+                if bet < Decimal("0.01"):
                     await message.answer("Минимальная сумма ставки: 0.01₽")
 
-                elif bet <= balance(message.from_user.id):
-                    if rand == 1:
-                        if block(message.from_user.id) == "cf_bet1":
-                            cur.execute(f"UPDATE users SET balance = {balance(message.from_user.id) + bet}")
-                            await message.answer(f"Орел, Вы выйграли Ваш баланс: {balance(message.from_user.id)}₽")
-                        elif block(message.from_user.id) == "cf_bet2":
-                            cur.execute(f"UPDATE users SET balance = {balance(message.from_user.id) - bet}")
-                            await message.answer(f"Орел, Вы проиграли Ваш баланс: {balance(message.from_user.id)}₽")
+                elif bet > balance(message.from_user.id):
+                    await message.answer(f"Недостаточно средств. Ваш баланс: {balance(message.from_user.id)}₽")
 
-                    elif rand == 2:
-                        if block(message.from_user.id) == "cf_bet1":
-                            cur.execute(f"UPDATE users SET balance = {balance(message.from_user.id) - bet}")
-                            await message.answer(f"Решка, Вы проиграли Ваш баланс: {balance(message.from_user.id)}₽")
-                        elif block(message.from_user.id) == "cf_bet2":
-                            cur.execute(f"UPDATE users SET balance = {balance(message.from_user.id) + bet}")
-                            await message.answer(f"Решка, Вы выйграли Ваш баланс: {balance(message.from_user.id)}₽")
-                    db.commit()
                 else:
-                    await message.answer("Недостаточно средств")
-            else:
-                await message.answer("""Пожалуйста используйте /help для навигации
+                    if cf_result == 1:
+                        if block(message.from_user.id) == "cf_bet1":
+                            cur.execute(f"UPDATE users SET balance = {balance(message.from_user.id) + bet} WHERE user_id == {message.from_user.id}")
 
-Или нажмите /start чтобы вернуться в главное меню""")
-    except decimal.InvalidOperation:
-        await message.answer("Некорректная сумма")
+                        elif block(message.from_user.id) == "cf_bet2":
+                            cur.execute(f"UPDATE users SET balance = {balance(message.from_user.id) - bet} WHERE user_id == {message.from_user.id}")
 
+                        await message.answer(f"Орел. Ваш баланс: {balance(message.from_user.id)}₽")
+                    elif cf_result == 2:
+                        if block(message.from_user.id) == "cf_bet1":
+                            cur.execute(f"UPDATE users SET balance = {balance(message.from_user.id) - bet} WHERE user_id == {message.from_user.id}")
 
-@dp.message(F.text == "/help")
-async def sender(message: Message):
-    if register(message.from_user.id):
-        await message.answer("""Команды быстрого доступа:
-        
-/start - Главное меню
-/balance - Баланс
-/games - Выбрать игру
-/coinflip - CoinFlip
-/dice - Dice""")
+                        elif block(message.from_user.id) == "cf_bet2":
+                            cur.execute(f"UPDATE users SET balance = {balance(message.from_user.id) + bet} WHERE user_id == {message.from_user.id}")
+
+                        await message.answer(f"Решка. Ваш баланс: {balance(message.from_user.id)}₽")
+            except decimal.InvalidOperation:
+                await message.answer("Некорректная сумма ставки")
+        else:
+            await message.answer(nav_text)
+    db.commit()
 
 
 async def main():
